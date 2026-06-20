@@ -1,0 +1,21 @@
+name: daily-stock-briefing
+
+on:
+  schedule:
+    # 01:07 UTC = 한국시간 오전 10:07 (깃허브 무료 cron은 혼잡 시 몇 분~십몇 분 지연될 수 있음)
+    - cron: "7 1 * * *"
+  workflow_dispatch: {}   # Actions 탭에서 "Run workflow"로 수동 실행
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Send briefing to KakaoTalk
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+        run: python send_briefing.py
