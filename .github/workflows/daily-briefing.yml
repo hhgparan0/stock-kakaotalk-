@@ -4,6 +4,8 @@ on:
   schedule:
     # 01:07 UTC = 한국시간 오전 10:07 (깃허브 무료 cron은 혼잡 시 몇 분~십몇 분 지연될 수 있음)
     - cron: "7 1 * * *"
+    # 05:07 UTC = 한국시간 오후 14:07 (미국장 마감 후라 오전과 같은 수치 = 리마인더용)
+    - cron: "7 5 * * *"
   workflow_dispatch: {}   # Actions 탭에서 "Run workflow"로 수동 실행
 
 jobs:
