@@ -1,12 +1,18 @@
-"""매일 아침 공포지수 + 미국 반도체주 브리핑을 카카오톡 '나에게 보내기'로 발송.
-GitHub Actions에서 실행됨. 외부 패키지 없이 표준 라이브러리만 사용.
+"""주가 브리핑을 카카오톡 '나에게 보내기'로 발송. GitHub Actions에서 실행.
+외부 패키지 없이 표준 라이브러리만 사용.
+
+실행 인자:
+  us (기본) : CNN 공포지수 + 미국 반도체주 (오전 발송용)
+  kr        : 코스피 + 삼성전자 + SK하이닉스 (오후 한국장 발송용)
 
 필요한 환경변수(=GitHub Secrets):
   KAKAO_REST_API_KEY  : 카카오 디벨로퍼스 REST API 키
+  KAKAO_CLIENT_SECRET : (앱에 Client Secret '사용함'이면 필요)
   KAKAO_REFRESH_TOKEN : talk_message 동의로 발급받은 refresh token
 """
 
 import os
+import sys
 import json
 import urllib.request
 import urllib.parse
@@ -15,7 +21,8 @@ from datetime import datetime, timezone, timedelta
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
-STOCKS = [("AVGO", "브로드컴"), ("AMD", ""), ("NVDA", "엔비디아"), ("SNDK", "샌디스크")]
+US_STOCKS = [("AVGO", "브로드컴"), ("AMD", ""), ("NVDA", "엔비디아"), ("SNDK", "샌디스크")]
+KR_STOCKS = [("005930.KS", "삼성전자"), ("000660.KS", "SK하이닉스")]
 
 RATING_KR = {
     "extreme fear": "극단적 공포",
@@ -76,8 +83,10 @@ def signal_for(score):
 
 
 def get_quote(ticker):
-    """(가격, 등락률%) 반환. 일일 등락률은 직전 거래일 두 종가로 계산."""
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=5d&interval=1d"
+    """(가격, 등락률%) 반환. 등락률은 종가 배열 마지막 두 값으로 계산.
+    장 마감 시: 최근 두 거래일 등락. 장중(한국 오후): 어제종가 대비 현재가 등락."""
+    enc = urllib.parse.quote(ticker)  # 코스피 '^KS11'의 ^ 인코딩
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{enc}?range=5d&interval=1d"
     data = http_get_json(url)
     res = data["chart"]["result"][0]
     closes = [c for c in res["indicators"]["quote"][0]["close"] if c is not None]
@@ -89,7 +98,11 @@ def fmt_price(p):
     return f"${p:,.2f}" if p < 1000 else f"${p:,.0f}"
 
 
-def build_message():
+def fmt_won(p):
+    return f"{p:,.0f}원"
+
+
+def build_message_us():
     kst = datetime.now(timezone.utc) + timedelta(hours=9)
     score, rating = get_fear_greed()
     rating_kr = RATING_KR.get(rating, rating or "-")
@@ -101,7 +114,7 @@ def build_message():
         lines.append("😱 공포지수 조회 실패")
 
     lines.append("💻 미국 반도체 (전일 마감)")
-    for tk, kr in STOCKS:
+    for tk, kr in US_STOCKS:
         try:
             price, chg = get_quote(tk)
             arrow = "🔺" if chg >= 0 else "🔻"
@@ -113,7 +126,32 @@ def build_message():
     return "\n".join(lines)
 
 
-def send_kakao(text):
+def build_message_kr():
+    kst = datetime.now(timezone.utc) + timedelta(hours=9)
+    label = "장중" if kst.weekday() < 5 else "전 거래일"
+    lines = [f"📊 한국장 브리핑 {kst.month}/{kst.day} ({label})"]
+
+    try:
+        price, chg = get_quote("^KS11")
+        arrow = "🔺" if chg >= 0 else "🔻"
+        lines.append(f"📈 코스피 {price:,.2f} {arrow}{abs(chg):.1f}%")
+    except Exception as e:
+        print("코스피 조회 실패:", e)
+        lines.append("📈 코스피 조회실패")
+
+    for tk, kr in KR_STOCKS:
+        try:
+            price, chg = get_quote(tk)
+            arrow = "🔺" if chg >= 0 else "🔻"
+            lines.append(f"{kr} {fmt_won(price)} {arrow}{abs(chg):.1f}%")
+        except Exception as e:
+            print(f"{kr} 조회 실패:", e)
+            lines.append(f"{kr} 조회실패")
+    return "\n".join(lines)
+
+
+def send_kakao(text, link_url="https://edition.cnn.com/markets/fear-and-greed",
+               button_title="자세히 보기"):
     rest_key = os.environ["KAKAO_REST_API_KEY"]
     refresh = os.environ["KAKAO_REFRESH_TOKEN"]
 
@@ -136,11 +174,8 @@ def send_kakao(text):
     template = {
         "object_type": "text",
         "text": text,
-        "link": {
-            "web_url": "https://edition.cnn.com/markets/fear-and-greed",
-            "mobile_web_url": "https://edition.cnn.com/markets/fear-and-greed",
-        },
-        "button_title": "공포지수 보기",
+        "link": {"web_url": link_url, "mobile_web_url": link_url},
+        "button_title": button_title,
     }
     http_post_json(
         "https://kapi.kakao.com/v2/api/talk/memo/default/send",
@@ -150,10 +185,16 @@ def send_kakao(text):
 
 
 def main():
-    text = build_message()
+    market = sys.argv[1].lower() if len(sys.argv) > 1 else "us"
+    if market == "kr":
+        text = build_message_kr()
+        link_url, button = "https://finance.naver.com/sise/", "코스피 보기"
+    else:
+        text = build_message_us()
+        link_url, button = "https://edition.cnn.com/markets/fear-and-greed", "공포지수 보기"
     print(text)
-    send_kakao(text)
-    print("카카오톡 발송 완료")
+    send_kakao(text, link_url, button)
+    print(f"카카오톡 발송 완료 ({market})")
 
 
 if __name__ == "__main__":

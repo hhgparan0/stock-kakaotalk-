@@ -2,11 +2,15 @@ name: daily-stock-briefing
 
 on:
   schedule:
-    # 01:07 UTC = 한국시간 오전 10:07 (깃허브 무료 cron은 혼잡 시 몇 분~십몇 분 지연될 수 있음)
+    # 01:07 UTC = 한국시간 오전 10:07 → 미국 반도체 + 공포지수
     - cron: "7 1 * * *"
-    # 05:07 UTC = 한국시간 오후 14:07 (미국장 마감 후라 오전과 같은 수치 = 리마인더용)
+    # 05:07 UTC = 한국시간 오후 14:07 → 코스피 + 삼성전자/하이닉스 (한국장 장중)
     - cron: "7 5 * * *"
-  workflow_dispatch: {}   # Actions 탭에서 "Run workflow"로 수동 실행
+  workflow_dispatch:
+    inputs:
+      market:
+        description: "수동 실행 시장 (us 또는 kr)"
+        default: "us"
 
 jobs:
   briefing:
@@ -16,8 +20,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Decide market
+        id: m
+        shell: bash
+        run: |
+          if [ "${{ github.event.schedule }}" = "7 5 * * *" ]; then
+            echo "market=kr" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.inputs.market }}" ]; then
+            echo "market=${{ github.event.inputs.market }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "market=us" >> "$GITHUB_OUTPUT"
+          fi
       - name: Send briefing to KakaoTalk
         env:
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
-        run: python send_briefing.py
+        run: python send_briefing.py ${{ steps.m.outputs.market }}
