@@ -2,10 +2,10 @@ name: daily-stock-briefing
 
 on:
   schedule:
-    # 01:07 UTC = 한국시간 오전 10:07 → 미국 반도체 + 공포지수
-    - cron: "7 1 * * *"
-    # 05:07 UTC = 한국시간 오후 14:07 → 코스피 + 삼성전자/하이닉스 (한국장 장중)
-    - cron: "7 5 * * *"
+    # 01:07 UTC = 한국시간 오전 10:07 → 미국 반도체 + 공포지수 (월~금)
+    - cron: "7 1 * * 1-5"
+    # 05:07 UTC = 한국시간 오후 14:07 → 코스피 + 삼성전자/하이닉스 (월~금)
+    - cron: "7 5 * * 1-5"
   workflow_dispatch:
     inputs:
       market:
@@ -24,7 +24,7 @@ jobs:
         id: m
         shell: bash
         run: |
-          if [ "${{ github.event.schedule }}" = "7 5 * * *" ]; then
+          if [ "${{ github.event.schedule }}" = "7 5 * * 1-5" ]; then
             echo "market=kr" >> "$GITHUB_OUTPUT"
           elif [ -n "${{ github.event.inputs.market }}" ]; then
             echo "market=${{ github.event.inputs.market }}" >> "$GITHUB_OUTPUT"
