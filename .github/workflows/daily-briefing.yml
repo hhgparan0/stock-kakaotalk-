@@ -1,13 +1,8 @@
 name: daily-stock-briefing
 
 on:
-  schedule:
-    # 01:07 UTC = 한국시간 오전 10:07 → 미국 반도체 + 공포지수 (월~금)
-    - cron: "7 1 * * 1-5"
-    # 05:07 UTC = 한국시간 오후 14:07 → 코스피 + 삼성전자/하이닉스 (월~금)
-    - cron: "7 5 * * 1-5"
-    # 07:00 UTC = 한국시간 16:00 → 6/21 PC-off 테스트용 (테스트 끝나면 삭제)
-    - cron: "0 7 21 6 *"
+  # cron 트리거는 Cloudflare Worker(stock-kakao-cron)가 workflow_dispatch로 대체.
+  # 직접 schedule을 두면 Worker cron과 중복 발송됨.
   workflow_dispatch:
     inputs:
       market:
