@@ -1,0 +1,17 @@
+name = "stock-kakao-cron"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# 평일(월~금) 한국시간 08:23 / 13:53 KST 발동 → GitHub Actions 처리 7분 감안, 도착 ~08:30 / ~14:00
+# 23 23 * * 0-4 → 23:23 UTC 일~목 = 08:23 KST 월~금 (미국 반도체 + 공포지수)
+# 53 4  * * 1-5 → 04:53 UTC 월~금 = 13:53 KST 월~금 (코스피 + 삼전/하이닉스)
+[triggers]
+crons = [
+  "23 23 * * SUN-THU",
+  "53 4 * * MON-FRI"
+]
+
+[vars]
+GH_REPO = "hhgparan0/stock-kakaotalk-"
+GH_WORKFLOW = "daily-briefing.yml"
+GH_REF = "main"
